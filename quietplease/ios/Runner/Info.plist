@@ -42,10 +42,12 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
-    <string>This sample use to monitor noise from microphone.</string>
-    <key>UIBackgroundModes</key>
-    <array>
-    	<string>audio</string>
-    </array>
+	<string>This application needs to access your microphone</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This application needs the speech recognition permissions</string>
+	<key>UIBackgroundModes</key>
+	<array>
+	    <string>audio</string>
+	</array>
 </dict>
 </plist>

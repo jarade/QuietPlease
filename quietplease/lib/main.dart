@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:speech_recognition/speech_recognition.dart';
+import 'package:willow_flutter_sound/willow_flutter_sound.dart';
+import 'dart:async';
 
 void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
+  static const TITLE = "Quiet Please";
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: TITLE,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.red,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(title: TITLE),
     );
   }
 }
@@ -44,17 +39,98 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  SpeechRecognition _speechRecognition;
+  FlutterSound flutterSound;
+  StreamSubscription _recorderSubscription;
+  StreamSubscription _dbPeakSubscription;
+  StreamSubscription _playerSubscription;
+
+  double _dbLevel;
+  bool _isAvailable = false;
+  bool _isListening = false;
   int _counter = 0;
+  String resultText = "";
+
+  @override
+  void initState(){
+    super.initState();
+    initSpeechRecognizer();
+    initFlutterSound();
+  }
 
   void _incrementCounter() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
       _counter++;
     });
+  }
+
+  void initSpeechRecognizer(){
+    _speechRecognition = SpeechRecognition();
+
+    _speechRecognition.setAvailabilityHandler(
+        (bool result) => setState(() => _isAvailable = result),
+    );
+
+    _speechRecognition.setRecognitionStartedHandler(
+        () => setState(() => _isListening = true),
+    );
+
+    _speechRecognition.setRecognitionResultHandler(
+        (String speech) => setState(() => resultText = speech),
+    );
+
+    _speechRecognition.setRecognitionCompleteHandler(
+        () => setState(()=> _isListening = false),
+    );
+
+    _speechRecognition.activate().then(
+        (result) => setState(()=> _isAvailable = result),
+    );
+  }
+
+  void initFlutterSound(){
+    flutterSound = new FlutterSound();
+    flutterSound.setSubscriptionDuration(0.01);
+    flutterSound.setDbPeakLevelUpdate(0.8);
+    flutterSound.setDbLevelEnabled(true);
+  }
+
+
+  void startListening() async{
+    resultText = "playing";
+    _speechRecognition.listen(locale: "en_US").then(
+            (result) => print('listening: $result'));
+    try {
+      String path = await flutterSound.startRecorder(null);
+        _dbPeakSubscription = flutterSound.onRecorderDbPeakChanged.listen(
+              (value) {
+              print("got update -> $value");
+              setState(() {
+                this.resultText += value.toString();
+              });
+            });
+       /* done in init speech recognizer
+      this.setState(() {
+        this._isListening = true;
+      });*/
+
+    }catch(err){
+      print('startRecorder error: $err');
+    }
+  }
+
+  void stopListening() async{
+    _speechRecognition.stop().then(
+          (result) => setState(() => _isListening = result),
+    );
+
+    resultText = "stopped";
+
+    try{
+      String result = await flutterSound.stopRecorder();
+    } catch (err){
+      print('stopRecorder error: $err');
+    }
   }
 
   @override
@@ -71,32 +147,76 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: Container(
         child: Column(
-          // Column is also layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                FloatingActionButton(
+                  child: Icon(Icons.cancel),
+                  mini: true,
+                  backgroundColor: Colors.deepOrange,
+                  onPressed: (){
+                    if(_isListening){
+                      _speechRecognition.cancel().then(
+                          (result) => setState(() {
+                            _isListening = result;
+                            resultText = "";
+                          }),
+                      );
+                    }
+                  },
+                ),
+                FloatingActionButton(
+                  child: Icon(Icons.mic),
+                  backgroundColor: Colors.pink,
+                  onPressed: (){
+                    if(_isAvailable && !_isListening){
+                      this.startListening();
+                    }
+                  },
+                ),
+                FloatingActionButton(
+                  child: Icon(Icons.stop),
+                  mini: true,
+                  backgroundColor: Colors.deepPurple,
+                  onPressed: (){
+                    if(_isListening){
+                      this.stopListening();
+                    }
+                  },
+                ),
+              ],
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.display1,
+            Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              decoration: BoxDecoration(
+                color: Colors.cyanAccent[100],
+                borderRadius: BorderRadius.circular(6.0),
+              ),
+              padding: EdgeInsets.symmetric(
+                vertical: 8.0,
+                horizontal: 12.0,
+              ),
+              child: Text(
+                resultText,
+                style: TextStyle(fontSize: 24.0),
+              )
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  'You have pushed the button this many times:',
+                ),
+                Text(
+                  '$_counter',
+                  style: Theme.of(context).textTheme.display1,
+                ),
+              ],
             ),
           ],
         ),
