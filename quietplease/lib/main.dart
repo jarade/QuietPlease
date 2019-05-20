@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:speech_recognition/speech_recognition.dart';
 import 'package:willow_flutter_sound/willow_flutter_sound.dart';
 import 'dart:async';
 
@@ -39,14 +38,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  SpeechRecognition _speechRecognition;
   FlutterSound flutterSound;
   StreamSubscription _recorderSubscription;
   StreamSubscription _dbPeakSubscription;
   StreamSubscription _playerSubscription;
 
   double _dbLevel;
-  bool _isAvailable = false;
   bool _isListening = false;
   int _counter = 0;
   String resultText = "";
@@ -54,7 +51,6 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState(){
     super.initState();
-    initSpeechRecognizer();
     initFlutterSound();
   }
 
@@ -64,29 +60,6 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  void initSpeechRecognizer(){
-    _speechRecognition = SpeechRecognition();
-
-    _speechRecognition.setAvailabilityHandler(
-        (bool result) => setState(() => _isAvailable = result),
-    );
-
-    _speechRecognition.setRecognitionStartedHandler(
-        () => setState(() => _isListening = true),
-    );
-
-    _speechRecognition.setRecognitionResultHandler(
-        (String speech) => setState(() => resultText = speech),
-    );
-
-    _speechRecognition.setRecognitionCompleteHandler(
-        () => setState(()=> _isListening = false),
-    );
-
-    _speechRecognition.activate().then(
-        (result) => setState(()=> _isAvailable = result),
-    );
-  }
 
   void initFlutterSound(){
     flutterSound = new FlutterSound();
@@ -98,36 +71,34 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void startListening() async{
     resultText = "playing";
-    _speechRecognition.listen(locale: "en_US").then(
-            (result) => print('listening: $result'));
     try {
+
+      _isListening = true;
       String path = await flutterSound.startRecorder(null);
         _dbPeakSubscription = flutterSound.onRecorderDbPeakChanged.listen(
               (value) {
-              print("got update -> $value");
-              setState(() {
-                this.resultText += value.toString();
-              });
-            });
-       /* done in init speech recognizer
-      this.setState(() {
-        this._isListening = true;
-      });*/
-
+                print("got update -> $value");
+                setState(() {
+                  this.resultText = "playing $value";
+                }
+              );
+            }
+        );
+      print(path);
     }catch(err){
       print('startRecorder error: $err');
     }
   }
 
   void stopListening() async{
-    _speechRecognition.stop().then(
-          (result) => setState(() => _isListening = result),
-    );
-
     resultText = "stopped";
-
+    _isListening = false;
     try{
       String result = await flutterSound.stopRecorder();
+      if(_dbPeakSubscription != null){
+        _dbPeakSubscription.cancel();
+        _dbPeakSubscription = null;
+      }
     } catch (err){
       print('stopRecorder error: $err');
     }
@@ -156,25 +127,10 @@ class _MyHomePageState extends State<MyHomePage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 FloatingActionButton(
-                  child: Icon(Icons.cancel),
-                  mini: true,
-                  backgroundColor: Colors.deepOrange,
-                  onPressed: (){
-                    if(_isListening){
-                      _speechRecognition.cancel().then(
-                          (result) => setState(() {
-                            _isListening = result;
-                            resultText = "";
-                          }),
-                      );
-                    }
-                  },
-                ),
-                FloatingActionButton(
                   child: Icon(Icons.mic),
                   backgroundColor: Colors.pink,
                   onPressed: (){
-                    if(_isAvailable && !_isListening){
+                    if(!_isListening){
                       this.startListening();
                     }
                   },
@@ -183,8 +139,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   child: Icon(Icons.stop),
                   mini: true,
                   backgroundColor: Colors.deepPurple,
-                  onPressed: (){
-                    if(_isListening){
+                  onPressed: () {
+                    if (_isListening) {
                       this.stopListening();
                     }
                   },
