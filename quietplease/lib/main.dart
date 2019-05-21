@@ -39,14 +39,15 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   FlutterSound flutterSound;
-  StreamSubscription _recorderSubscription;
   StreamSubscription _dbPeakSubscription;
-  StreamSubscription _playerSubscription;
 
-  double _dbLevel;
+  double _dbAvg = 0;
+  double _dbTotal = 0;
+  int _dbCount = 0;
   bool _isListening = false;
   int _counter = 0;
   String resultText = "";
+
 
   @override
   void initState(){
@@ -64,27 +65,36 @@ class _MyHomePageState extends State<MyHomePage> {
   void initFlutterSound(){
     flutterSound = new FlutterSound();
     flutterSound.setSubscriptionDuration(0.01);
-    flutterSound.setDbPeakLevelUpdate(0.8);
+    flutterSound.setDbPeakLevelUpdate(0.1);
     flutterSound.setDbLevelEnabled(true);
   }
 
-
   void startListening() async{
     resultText = "playing";
-    try {
+    this._dbCount = 0;
+    this._dbTotal = 0;
+    this._counter = 0;
 
-      _isListening = true;
+    try {
+      this._isListening = true;
       String path = await flutterSound.startRecorder(null);
-        _dbPeakSubscription = flutterSound.onRecorderDbPeakChanged.listen(
+      _dbPeakSubscription = flutterSound.onRecorderDbPeakChanged.listen(
               (value) {
-                print("got update -> $value");
+                this._dbCount++;
+                this._dbTotal += value;
+
+                this._dbAvg = this._dbTotal/this._dbCount;
+
                 setState(() {
-                  String val =value.toStringAsFixed(2);
+                  if(value > 85){
+                    this._counter++;
+                  }
+                  String val = value.toStringAsFixed(2);
                   this.resultText = "playing $val";
                 }
               );
             }
-        );
+      );
       print(path);
     }catch(err){
       print('startRecorder error: $err');
@@ -92,8 +102,10 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void stopListening() async{
-    setState(() {this.resultText = "stopped";});
-    _isListening = false;
+    setState(() {
+      this.resultText = "stopped, avg: " + this._dbAvg.toString();
+    });
+    this._isListening = false;
     try{
       String result = await flutterSound.stopRecorder();
       if(_dbPeakSubscription != null){
@@ -105,6 +117,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -115,8 +129,6 @@ class _MyHomePageState extends State<MyHomePage> {
     // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
       body: Container(
@@ -131,7 +143,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   child: Icon(Icons.mic),
                   backgroundColor: Colors.pink,
                   onPressed: (){
-                    if(!_isListening){
+                    if(!this._isListening){
                       this.startListening();
                     }
                   },
@@ -140,7 +152,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   child: Icon(Icons.stop),
                   backgroundColor: Colors.deepPurple,
                   onPressed: () {
-                    if (_isListening) {
+                    if (this._isListening) {
                       this.stopListening();
                     }
                   },
