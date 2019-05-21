@@ -79,7 +79,8 @@ class _MyHomePageState extends State<MyHomePage> {
               (value) {
                 print("got update -> $value");
                 setState(() {
-                  this.resultText = "playing $value";
+                  String val =value.toStringAsFixed(2);
+                  this.resultText = "playing $val";
                 }
               );
             }
@@ -91,7 +92,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void stopListening() async{
-    resultText = "stopped";
+    setState(() {this.resultText = "stopped";});
     _isListening = false;
     try{
       String result = await flutterSound.stopRecorder();
@@ -137,7 +138,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
                 FloatingActionButton(
                   child: Icon(Icons.stop),
-                  mini: true,
                   backgroundColor: Colors.deepPurple,
                   onPressed: () {
                     if (_isListening) {
