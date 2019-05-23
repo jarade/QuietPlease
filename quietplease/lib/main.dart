@@ -37,6 +37,8 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
+const alarmAudioPath = "sound_alarm.mp3";
+
 class _MyHomePageState extends State<MyHomePage> {
   FlutterSound flutterSound;
   StreamSubscription _dbPeakSubscription;
@@ -48,6 +50,13 @@ class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
   String resultText = "";
 
+  double _dbMin = 999;
+  double _dbMax = 0;
+  double _dbCountCheck = 0;
+  double _dbAvgCheck = 0;
+  double _dbTotalCheck = 0;
+  double _dbAlertValue = 90;
+  double _dbMinAlertValue = 30;
 
   @override
   void initState(){
@@ -57,23 +66,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _incrementCounter() {
     setState(() {
-      _counter++;
+      this._counter++;
     });
   }
 
 
   void initFlutterSound(){
     flutterSound = new FlutterSound();
-    flutterSound.setSubscriptionDuration(0.01);
-    flutterSound.setDbPeakLevelUpdate(0.1);
+    flutterSound.setSubscriptionDuration(0.1);
+    flutterSound.setDbPeakLevelUpdate(0.03);
     flutterSound.setDbLevelEnabled(true);
   }
 
   void startListening() async{
-    resultText = "playing";
+    resultText = "Currently: ";
     this._dbCount = 0;
     this._dbTotal = 0;
     this._counter = 0;
+    this._dbCountCheck = 0;
+    this._dbTotalCheck = 0;
+    this._dbAvgCheck = 0;
+    this._dbMax = 0;
+    this._dbMin = 999;
+    this._dbAvg = 0;
 
     try {
       this._isListening = true;
@@ -83,14 +98,43 @@ class _MyHomePageState extends State<MyHomePage> {
                 this._dbCount++;
                 this._dbTotal += value;
 
-                this._dbAvg = this._dbTotal/this._dbCount;
+                //this._dbAvg = this._dbTotal/this._dbCount;
 
+
+                this._dbTotalCheck += value;
+                // messed with decibel calculations to get a more lifelike result. still needs work
+                // Theory have a larger subset average so that it gives more accurate readings instead of 120 here 5 there sort of thing. more consistent to be able to play sound
                 setState(() {
-                  if(value > 85){
-                    this._counter++;
-                  }
                   String val = value.toStringAsFixed(2);
-                  this.resultText = "playing $val";
+                  this.resultText = "Currently: $val";
+                  this._dbCountCheck++;
+
+                  if(this._dbCountCheck >= 25){
+                    this._dbAvgCheck += this._dbTotalCheck / this._dbCountCheck;
+                    // Update values for alert message condition
+
+                    this._dbAvg = (this._dbAvg + this._dbAvgCheck)/2;
+                    if(this._dbAvg >= this._dbAlertValue){
+                      // TODO add sound for too loud
+                      // path = "sound_alarm.mp3"
+                    }
+
+                    if(this._dbAvg < this._dbMinAlertValue){
+                      // TODO add sound for too soft
+                    }
+
+                    if(this._dbAvgCheck > this._dbMax){
+                      this._dbMax = this._dbAvgCheck;
+                    }
+
+                    if(this._dbAvgCheck < this._dbMin){
+                      this._dbMin = this._dbAvgCheck;
+                    }
+
+                    this._dbCountCheck = 0;
+                    this._dbTotalCheck = 0;
+                    this._dbAvgCheck = 0;
+                  }
                 }
               );
             }
@@ -103,11 +147,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void stopListening() async{
     setState(() {
-      this.resultText = "stopped, avg: " + this._dbAvg.toString();
+      this.resultText = "stopped, avg: " + this._dbAvg.toStringAsFixed(2);
     });
     this._isListening = false;
     try{
       String result = await flutterSound.stopRecorder();
+
+
       if(_dbPeakSubscription != null){
         _dbPeakSubscription.cancel();
         _dbPeakSubscription = null;
@@ -178,10 +224,34 @@ class _MyHomePageState extends State<MyHomePage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 Text(
-                  'You have pushed the button this many times:',
+                  'Your overall decibel average:',
                 ),
                 Text(
-                  '$_counter',
+                  this._dbAvg.toStringAsFixed(2),
+                  style: Theme.of(context).textTheme.display1,
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  'The lowest decibel set was:',
+                ),
+                Text(
+                  this._dbMin.toStringAsFixed(2),
+                  style: Theme.of(context).textTheme.display1,
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  'The highest decibel set was:',
+                ),
+                Text(
+                  this._dbMax.toStringAsFixed(2),
                   style: Theme.of(context).textTheme.display1,
                 ),
               ],
