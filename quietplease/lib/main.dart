@@ -47,7 +47,9 @@ class _MyHomePageState extends State<MyHomePage> {
   double _dbTotal = 0;
   int _dbCount = 0;
   bool _isListening = false;
+  bool _isTooLoud = false;
   int _counter = 0;
+  MaterialColor _color = Colors.green;
   String resultText = "";
 
   double _dbMin = 999;
@@ -55,7 +57,7 @@ class _MyHomePageState extends State<MyHomePage> {
   double _dbCountCheck = 0;
   double _dbAvgCheck = 0;
   double _dbTotalCheck = 0;
-  double _dbAlertValue = 90;
+  double _dbAlertValue = 60;
   double _dbMinAlertValue = 30;
 
   @override
@@ -114,13 +116,21 @@ class _MyHomePageState extends State<MyHomePage> {
                     // Update values for alert message condition
 
                     this._dbAvg = (this._dbAvg + this._dbAvgCheck)/2;
-                    if(this._dbAvg >= this._dbAlertValue){
+                    if(value >= this._dbAlertValue){
                       // TODO add sound for too loud
-                      // path = "sound_alarm.mp3"
+                      // path = "sound_alarm.mp3"s
+                      this._isTooLoud = true;
+                      setState((){
+                        this._color=Colors.red;
+                      });
                     }
 
-                    if(this._dbAvg < this._dbMinAlertValue){
+                    if(value < this._dbMinAlertValue){
                       // TODO add sound for too soft
+                      this._isTooLoud = false;
+                      setState((){
+                        this._color=Colors.green;
+                      });
                     }
 
                     if(this._dbAvgCheck > this._dbMax){
@@ -176,6 +186,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        backgroundColor: _isTooLoud? Colors.red: Colors.green
       ),
       body: Container(
         child: Column(
@@ -264,6 +275,7 @@ class _MyHomePageState extends State<MyHomePage> {
         tooltip: 'Increment',
         child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
+      backgroundColor: _color
     );
   }
 }
