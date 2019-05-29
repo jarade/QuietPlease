@@ -1,11 +1,14 @@
 import 'package:noise_meter/noise_meter.dart';
 import 'package:flutter/material.dart';
 
-import 'package:audioplayers/audioPlayers.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:audioplayers/audio_cache.dart';
 import 'dart:async';
 
 void main() => runApp(MyApp());
+
+const alarmAudioPath = "sound_alarm.mp3";
+const softAudioPath = "sound_alarm.mp3";
 
 class MyApp extends StatelessWidget {
   static const TITLE = "Quiet Please";
@@ -25,32 +28,22 @@ class MyApp extends StatelessWidget {
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key, this.title}) : super(key: key);
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
   final String title;
 
   @override
   _MyHomePageState createState() => _MyHomePageState();
 }
 
-const alarmAudioPath = "sound_alarm.mp3";
 
 class _MyHomePageState extends State<MyHomePage> {
   StreamSubscription<NoiseEvent> _noiseSubscription;
   Noise _noise;
 
   static AudioCache player = new AudioCache();
-  AudioPlayer audioPlayer = null;
+  AudioPlayer audioPlayer = AudioPlayer();
   bool playingSound = false;
 
-  String resultText = "";
+  String resultText = "Click mic icon to start";
   double _maxValue = 70;
   double _minValue = 20;
 
@@ -67,13 +60,16 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
   }
 
+  Future<void> setPlayer(AudioPlayer ap) async{
+    this.audioPlayer = ap;
+    audioPlayer.onPlayerCompletion.listen((event) {
+      playingSound = false;
+    });
+  }
+
   /// onData - on change of the decibels
   /// returns: void
   /// params: NoiseEvent
-  ///
-  void setPlayer(AudioPlayer ap){
-    this.audioPlayer = ap;
-  }
   void onData(NoiseEvent e) {
     this.setState(() {
       this.resultText = "Currently: ${e.decibel} dB";
@@ -86,20 +82,25 @@ class _MyHomePageState extends State<MyHomePage> {
       if(e.decibel >= this._maxValue){
         this._color = Colors.red;
         if(!playingSound) {
-          //audioPlayer = player.play(alarmAudioPath);
-          //audioPlayer.onPlayerCompletion.listen((event) {
-          //  playingSound = false;
-          //});
+          player.play(alarmAudioPath).then((result){
+            this.audioPlayer = result;
+            audioPlayer.onPlayerCompletion.listen((event) {
+              playingSound = false;
+            });
+            playingSound = true;
+          });
         }
       }
       if(e.decibel <= this._minValue){
         this._color = Colors.blue;
         if(!playingSound) {
-          var ap = player.play(alarmAudioPath) ;
-
-          //audioPlayer.onPlayerCompletion.listen((event) {
-          //  playingSound = false;
-          //});
+          player.play(softAudioPath).then((result){
+            this.audioPlayer = result;
+            audioPlayer.onPlayerCompletion.listen((event) {
+              playingSound = false;
+            });
+            playingSound = true;
+          });
         }
       }
 
@@ -138,6 +139,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       if(audioPlayer != null){
         audioPlayer.stop();
+        playingSound = false;
       }
       if (_noiseSubscription != null) {
         _noiseSubscription.cancel();
@@ -192,21 +194,19 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
                 Container(
-                  width: MediaQuery.of(context).size.width * 0.9,
+                  width: MediaQuery.of(context).size.width - 24,
                   decoration: BoxDecoration(
                     color: Colors.cyanAccent[100],
                     borderRadius: BorderRadius.circular(6.0),
                   ),
                   padding: EdgeInsets.symmetric(
                     vertical: 8.0,
-                    horizontal: (MediaQuery.of(context).size.width * 0.1),
+                    horizontal: 12.0,
                   ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: <Widget>[
                       Row(
                         children: <Widget>[
@@ -256,15 +256,15 @@ class _MyHomePageState extends State<MyHomePage> {
                   )
                 ),
                 Container(
-                    width: MediaQuery.of(context).size.width * 0.9,
+                    width: MediaQuery.of(context).size.width -24,
                     decoration: BoxDecoration(
                       color: Colors.cyanAccent[100],
                       borderRadius: BorderRadius.circular(6.0),
                     ),
                     padding:
                     EdgeInsets.symmetric(
-                      vertical: 8.0,
-                      horizontal: (MediaQuery.of(context).size.width * 0.1),
+                      vertical: 4.0,
+                      horizontal: 4.0,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
