@@ -1,5 +1,8 @@
+import 'package:noise_meter/noise_meter.dart';
 import 'package:flutter/material.dart';
-import 'package:willow_flutter_sound/willow_flutter_sound.dart';
+
+import 'package:audioplayers/audioPlayers.dart';
+import 'package:audioplayers/audio_cache.dart';
 import 'dart:async';
 
 void main() => runApp(MyApp());
@@ -40,241 +43,259 @@ class MyHomePage extends StatefulWidget {
 const alarmAudioPath = "sound_alarm.mp3";
 
 class _MyHomePageState extends State<MyHomePage> {
-  FlutterSound flutterSound;
-  StreamSubscription _dbPeakSubscription;
+  StreamSubscription<NoiseEvent> _noiseSubscription;
+  Noise _noise;
 
+  static AudioCache player = new AudioCache();
+  AudioPlayer audioPlayer = null;
+  bool playingSound = false;
+
+  String resultText = "";
+  double _maxValue = 70;
+  double _minValue = 20;
+
+  MaterialColor _color = Colors.green;
   double _dbAvg = 0;
   double _dbTotal = 0;
   int _dbCount = 0;
   bool _isListening = false;
-  bool _isTooLoud = false;
-  int _counter = 0;
-  MaterialColor _color = Colors.green;
-  String resultText = "";
-
-  double _dbMin = 999;
-  double _dbMax = 0;
-  double _dbCountCheck = 0;
-  double _dbAvgCheck = 0;
-  double _dbTotalCheck = 0;
-  double _dbAlertValue = 60;
-  double _dbMinAlertValue = 30;
+  int _dbMin = 999;
+  int _dbMax = 0;
 
   @override
   void initState(){
     super.initState();
-    initFlutterSound();
   }
 
-  void _incrementCounter() {
-    setState(() {
-      this._counter++;
+  /// onData - on change of the decibels
+  /// returns: void
+  /// params: NoiseEvent
+  ///
+  void setPlayer(AudioPlayer ap){
+    this.audioPlayer = ap;
+  }
+  void onData(NoiseEvent e) {
+    this.setState(() {
+      this.resultText = "Currently: ${e.decibel} dB";
+
+      this._dbCount++;
+      this._dbTotal += e.decibel;
+      this._dbAvg = this._dbTotal/this._dbCount;
+
+      this._color = Colors.green;
+      if(e.decibel >= this._maxValue){
+        this._color = Colors.red;
+        if(!playingSound) {
+          //audioPlayer = player.play(alarmAudioPath);
+          //audioPlayer.onPlayerCompletion.listen((event) {
+          //  playingSound = false;
+          //});
+        }
+      }
+      if(e.decibel <= this._minValue){
+        this._color = Colors.blue;
+        if(!playingSound) {
+          var ap = player.play(alarmAudioPath) ;
+
+          //audioPlayer.onPlayerCompletion.listen((event) {
+          //  playingSound = false;
+          //});
+        }
+      }
+
+      if(e.decibel > this._dbMax){
+        this._dbMax = e.decibel;
+      }
+
+      // Ignore the first run of this function since it will be 0
+      if(e.decibel < this._dbMin && this._isListening){
+        this._dbMin = e.decibel;
+      }
+
+      if (!this._isListening) {
+        this._isListening = true;
+      }
     });
   }
 
-
-  void initFlutterSound(){
-    flutterSound = new FlutterSound();
-    flutterSound.setSubscriptionDuration(0.1);
-    flutterSound.setDbPeakLevelUpdate(0.03);
-    flutterSound.setDbLevelEnabled(true);
-  }
-
-  void startListening() async{
-    resultText = "Currently: ";
-    this._dbCount = 0;
-    this._dbTotal = 0;
-    this._counter = 0;
-    this._dbCountCheck = 0;
-    this._dbTotalCheck = 0;
-    this._dbAvgCheck = 0;
-    this._dbMax = 0;
-    this._dbMin = 999;
-    this._dbAvg = 0;
-
+  void startListening() async {
     try {
-      this._isListening = true;
-      String path = await flutterSound.startRecorder(null);
-      _dbPeakSubscription = flutterSound.onRecorderDbPeakChanged.listen(
-              (value) {
-                this._dbCount++;
-                this._dbTotal += value;
+      _noise = new Noise(500); // New observation every 500 ms
+      _noiseSubscription = _noise.noiseStream.listen(onData);
 
-                //this._dbAvg = this._dbTotal/this._dbCount;
-
-
-                this._dbTotalCheck += value;
-                // messed with decibel calculations to get a more lifelike result. still needs work
-                // Theory have a larger subset average so that it gives more accurate readings instead of 120 here 5 there sort of thing. more consistent to be able to play sound
-                setState(() {
-                  String val = value.toStringAsFixed(2);
-                  this.resultText = "Currently: $val";
-                  this._dbCountCheck++;
-
-                  if(this._dbCountCheck >= 25){
-                    this._dbAvgCheck += this._dbTotalCheck / this._dbCountCheck;
-                    // Update values for alert message condition
-
-                    this._dbAvg = (this._dbAvg + this._dbAvgCheck)/2;
-                    if(value >= this._dbAlertValue){
-                      // TODO add sound for too loud
-                      // path = "sound_alarm.mp3"s
-                      this._isTooLoud = true;
-                      setState((){
-                        this._color=Colors.red;
-                      });
-                    }
-
-                    if(value < this._dbMinAlertValue){
-                      // TODO add sound for too soft
-                      this._isTooLoud = false;
-                      setState((){
-                        this._color=Colors.green;
-                      });
-                    }
-
-                    if(this._dbAvgCheck > this._dbMax){
-                      this._dbMax = this._dbAvgCheck;
-                    }
-
-                    if(this._dbAvgCheck < this._dbMin){
-                      this._dbMin = this._dbAvgCheck;
-                    }
-
-                    this._dbCountCheck = 0;
-                    this._dbTotalCheck = 0;
-                    this._dbAvgCheck = 0;
-                  }
-                }
-              );
-            }
-      );
-      print(path);
-    }catch(err){
-      print('startRecorder error: $err');
+      resultText = "Currently: 0";
+      this._dbCount = 0;
+      this._dbTotal = 0;
+      this._dbMax = 0;
+      this._dbMin = 999;
+      this._dbAvg = 0;
+    } on NoiseMeterException catch (exception) {
+      print(exception);
     }
   }
 
-  void stopListening() async{
-    setState(() {
-      this.resultText = "stopped, avg: " + this._dbAvg.toStringAsFixed(2);
-    });
-    this._isListening = false;
-    try{
-      String result = await flutterSound.stopRecorder();
-
-
-      if(_dbPeakSubscription != null){
-        _dbPeakSubscription.cancel();
-        _dbPeakSubscription = null;
+  void stopListening() async {
+    try {
+      if(audioPlayer != null){
+        audioPlayer.stop();
       }
-    } catch (err){
+      if (_noiseSubscription != null) {
+        _noiseSubscription.cancel();
+        _noiseSubscription = null;
+      }
+      this.setState(() {
+        this._isListening = false;
+        this._color = Colors.green;
+      });
+    } catch (err) {
       print('stopRecorder error: $err');
     }
   }
 
+  Expanded textComponent(String message){
+    return new Expanded(
+        child: Text(
+          message,
+          style: TextStyle(fontSize: 18.0)
+        )
+    );
+  }
 
+  Flexible fieldComponent(String label, Function func){
+    return new Flexible(
+        child: TextField(
+          decoration: InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: label,
+            fillColor: Colors.white,
+            filled: true,
+          ),
+          keyboardType: TextInputType.number,
+          maxLength: 3,
+          onSubmitted: func,
+        )
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
-        backgroundColor: _isTooLoud? Colors.red: Colors.green
+        backgroundColor: _color
       ),
-      body: Container(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            Row(
+      body: Row(
+        children: <Widget>[
+          Container(
+            padding: EdgeInsets.symmetric(
+                horizontal: 12.0
+            ),
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                FloatingActionButton(
-                  child: Icon(Icons.mic),
-                  backgroundColor: Colors.pink,
-                  onPressed: (){
-                    if(!this._isListening){
-                      this.startListening();
-                    }
-                  },
+                Container(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  decoration: BoxDecoration(
+                    color: Colors.cyanAccent[100],
+                    borderRadius: BorderRadius.circular(6.0),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    vertical: 8.0,
+                    horizontal: (MediaQuery.of(context).size.width * 0.1),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                            Text(
+                              resultText,
+                              style: TextStyle(fontSize: 24.0),
+                            ),
+                        ],
+                      ),
+                      Row(
+                        children: <Widget>[
+                          fieldComponent("What is the quiet threshold?",
+                              (value) => setState(() => this._minValue = double.parse(value)  )
+                          ),
+                         ],
+                      ),
+                      Row(
+                         children: <Widget>[
+                            fieldComponent("What is the ear bleeading threshold?",
+                                (value) => setState(() => this._maxValue = double.parse(value)  )
+                            ),
+                         ],
+                      ),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: <Widget>[
+                          textComponent('Your overall decibel average:'),
+                          textComponent(this._dbAvg.toStringAsFixed(2)),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: <Widget>[
+                          textComponent('The lowest decibel set was:'),
+                          textComponent("$_dbMin"),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: <Widget>[
+                          textComponent('The highest decibel set was:'),
+                          textComponent("$_dbMax"),
+                        ],
+                      ),
+                    ]
+                  )
                 ),
-                FloatingActionButton(
-                  child: Icon(Icons.stop),
-                  backgroundColor: Colors.deepPurple,
-                  onPressed: () {
-                    if (this._isListening) {
-                      this.stopListening();
-                    }
-                  },
+                Container(
+                    width: MediaQuery.of(context).size.width * 0.9,
+                    decoration: BoxDecoration(
+                      color: Colors.cyanAccent[100],
+                      borderRadius: BorderRadius.circular(6.0),
+                    ),
+                    padding:
+                    EdgeInsets.symmetric(
+                      vertical: 8.0,
+                      horizontal: (MediaQuery.of(context).size.width * 0.1),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        FloatingActionButton(
+                          child: Icon(Icons.mic),
+                          backgroundColor: Colors.pink,
+                          onPressed: (){
+                            if(!this._isListening){
+                              this.startListening();
+                            }
+                          },
+                        ),
+                        FloatingActionButton(
+                          child: Icon(Icons.stop),
+                          backgroundColor: Colors.deepPurple,
+                          onPressed: () {
+                            if (this._isListening) {
+                              this.stopListening();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                 ),
               ],
             ),
-            Container(
-              width: MediaQuery.of(context).size.width * 0.8,
-              decoration: BoxDecoration(
-                color: Colors.cyanAccent[100],
-                borderRadius: BorderRadius.circular(6.0),
-              ),
-              padding: EdgeInsets.symmetric(
-                vertical: 8.0,
-                horizontal: 12.0,
-              ),
-              child: Text(
-                resultText,
-                style: TextStyle(fontSize: 24.0),
-              )
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  'Your overall decibel average:',
-                ),
-                Text(
-                  this._dbAvg.toStringAsFixed(2),
-                  style: Theme.of(context).textTheme.display1,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  'The lowest decibel set was:',
-                ),
-                Text(
-                  this._dbMin.toStringAsFixed(2),
-                  style: Theme.of(context).textTheme.display1,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  'The highest decibel set was:',
-                ),
-                Text(
-                  this._dbMax.toStringAsFixed(2),
-                  style: Theme.of(context).textTheme.display1,
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ]
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
       backgroundColor: _color
     );
   }
